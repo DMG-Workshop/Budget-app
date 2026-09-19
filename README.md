@@ -7,9 +7,8 @@ The audit runs on an AI backend **you** choose — Claude, Gemini, OpenAI, or a
 model on your own machine via Ollama or LM Studio. With a local model, the
 statement never leaves your network.
 
-> **Status.** The Android app is the current focus and is complete. A
-> self-hosted server and an all-in-one appliance are started but parked — see
-> [Status](#status) for exactly what exists.
+Two ways to run it: a **phone app**, or a **self-hosted appliance** on your own
+network that every device in the house can use.
 
 ## What it does
 
@@ -33,12 +32,19 @@ rather than silently corrected.
 ## Layout
 
 ```
-app/                     Flutter app (Android; iOS and desktop come free later)
+app/                     Flutter app (Android; iOS builds from the same source)
 packages/audit_core/     Pure Dart: schema, prompt, PDF routing, verifiers
 contracts/               Schema + prompt, exported from Dart for non-Dart clients
-server/                  Self-hosted server — PARKED mid-build
-.github/workflows/       CI: analyze, test, contract sync, Android APK
+server/                  Self-hosted FastAPI server and web UI
+appliance/               docker compose, Caddy, mDNS, systemd, installer
+.github/workflows/       CI: analyze, test, contract sync, APK, image build
 ```
+
+The server is not a second implementation of the audit. It reads the **same
+exported contract** — the schema and the prompt are authored once in Dart and
+written to `contracts/`, and the server's tests compare what it builds against
+those files byte for byte. A statement audited in a browser and on a phone
+cannot take different instructions to the same model.
 
 ### It reuses EchoCodex
 
@@ -82,20 +88,34 @@ See **[docs/ANDROID.md](docs/ANDROID.md)** for building, signing, and — the
 part that actually catches people out — connecting to a model on your own
 network.
 
+### Or run the appliance
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DMG-Workshop/Budget-app/main/appliance/scripts/install.sh | sudo bash
+```
+
+Docker, a local model, mDNS and a certificate, on any Debian, Ubuntu or
+Raspberry Pi OS box. Then open `https://coldwater.local` from anything on the
+network. See **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)**.
+
 ## Status
 
 | Part | State |
 |---|---|
 | `audit_core` | Complete. 88 tests. |
 | Android app | Complete. 24 tests. |
-| Android/iOS network config | Complete. |
-| CI | Complete: analyze, test, contract sync, APK build. |
-| iOS app | Builds from the same code; needs a Mac, untested. |
-| Self-hosted server | **Parked.** Core logic, providers, pipeline and parity tests done; routes, storage and web UI not written. |
-| Appliance packaging | **Parked.** Not started. |
+| Self-hosted server + web UI | Complete. 120 tests. |
+| Appliance packaging | Complete: compose, Caddy with its own CA, mDNS, systemd, installer, bootable image. |
+| CI | analyze, both test suites, contract sync, Android APK, Docker image built and health-checked. |
+| iOS app | Builds from the same source; never compiled — needs a Mac. |
 
-Nothing has been run against a real provider or a real bank statement yet —
-every test uses recorded responses and fixtures.
+**Nothing has been run against a real provider or a real bank statement.**
+Every test uses recorded responses, a stub model server, and generated PDFs.
+The wire formats match the documented APIs and EchoCodex's working adapters,
+but the first real audit is unproven.
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for what is deliberately not built yet,
+including investments.
 
 ## Licence
 

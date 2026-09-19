@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Prints the appliance's root certificate, so a phone can trust its HTTPS.
+#
+# Caddy mints this CA on first boot. Installing it on a device is what turns
+# https://coldwater.local from a certificate warning into a normal
+# connection — and on Android it is the alternative to a cleartext exemption,
+# because the app's network security config trusts user-installed CAs for
+# .local names specifically.
+set -euo pipefail
+
+COMPOSE_DIR="${COLDWATER_DIR:-/opt/coldwater/appliance}"
+CA_PATH=/data/caddy/pki/authorities/local/root.crt
+
+cd "$COMPOSE_DIR"
+
+if [[ "${1:-}" == "--save" ]]; then
+    out="${2:-coldwater-ca.crt}"
+    docker compose exec -T caddy cat "$CA_PATH" > "$out"
+    echo "Wrote $out" >&2
+    echo >&2
+    echo "Install it on each device:" >&2
+    echo "  Android  Settings > Security > Encryption & credentials >" >&2
+    echo "           Install a certificate > CA certificate" >&2
+    echo "  iOS      AirDrop or email it, install the profile, then enable it" >&2
+    echo "           under Settings > General > About > Certificate Trust Settings" >&2
+    exit 0
+fi
+
+docker compose exec -T caddy cat "$CA_PATH"

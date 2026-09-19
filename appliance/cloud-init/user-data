@@ -1,0 +1,52 @@
+#cloud-config
+#
+# Builds a Coldwater appliance on first boot.
+#
+# Works with any cloud-init capable image — the Debian and Ubuntu generic
+# cloud images, and Raspberry Pi OS, which has run cloud-init since Bookworm.
+# See ../scripts/build-image.sh for turning this into a bootable disk.
+#
+# CHANGE THE PASSWORD AND THE KEY BELOW BEFORE USING THIS.
+
+hostname: coldwater
+prefer_fqdn_over_hostname: false
+
+users:
+  - name: coldwater
+    gecos: Coldwater appliance
+    groups: [sudo, docker]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    # Generate with: mkpasswd --method=SHA-512 --rounds=4096
+    # This placeholder is "changeme" and is not safe to keep.
+    passwd: "$6$rounds=4096$coldwater$0hZ0sX9y2i6xqJpQm0g1kY1qz4nT1oN4bC6r9sH2dV8fF3wX5aL7eR0uI2oP4kM6cZ8yB1nQ3vT5xW7jD9gS0/"
+    ssh_authorized_keys:
+      # - ssh-ed25519 AAAA... you@yourmachine
+      []
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - avahi-daemon
+  - avahi-utils
+
+write_files:
+  - path: /etc/coldwater-install.env
+    permissions: "0600"
+    content: |
+      COLDWATER_BRANCH=main
+      # COLDWATER_TOKEN=pick-something-long
+
+runcmd:
+  # The installer is idempotent and does everything the appliance needs:
+  # Docker, the compose stack, mDNS, and the systemd unit.
+  - [ bash, -c, "set -a; . /etc/coldwater-install.env; set +a; curl -fsSL https://raw.githubusercontent.com/DMG-Workshop/Budget-app/${COLDWATER_BRANCH}/appliance/scripts/install.sh | bash" ]
+
+final_message: |
+  Coldwater is up after $UPTIME seconds.
+  Open https://coldwater.local
+  Export the certificate authority with: sudo coldwater-ca --save coldwater-ca.crt
