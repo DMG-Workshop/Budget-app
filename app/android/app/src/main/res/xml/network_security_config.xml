@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext policy for talking to a model server on the user's own network.
+
+  READ THIS BEFORE EDITING — the obvious thing does not work.
+
+  Android's network security config matches DNS name suffixes. It has no
+  wildcard for IP literals, so there is no way to express "any address in
+  192.168.0.0/16" or "any 10.x.x.x" here. `<domain>192.168.*.*</domain>` is
+  not a syntax error that will warn you; it simply never matches anything,
+  and the request fails at runtime with "Cleartext HTTP traffic to
+  192.168.1.10 not permitted".
+
+  There are exactly three ways to reach a plain-HTTP model server on a LAN,
+  and this file takes the first two:
+
+   1. Use a name, not an address. Any *.local, *.lan or *.home.arpa host is
+      permitted below, which covers the self-hosted appliance and anything
+      else advertised over mDNS. This is the recommended route.
+   2. Develop against the emulator. Debug builds permit cleartext anywhere
+      (see debug-overrides), so 10.0.2.2 and a hand-typed LAN IP both work
+      while developing.
+   3. Ship cleartext-everywhere in release. That means deleting the
+      base-config below and setting cleartextTrafficPermitted="true" on it.
+      It weakens every connection the app makes, including to the cloud
+      providers, which is why it is not the default. Prefer the appliance
+      over HTTPS instead — it terminates TLS with its own certificate, and
+      then none of this applies.
+-->
+<network-security-config>
+
+    <!-- Everything not named below: HTTPS only. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!--
+      Loopback and the emulator's alias for its host machine. 10.0.2.2 is the
+      single most common local-model address there is, because inside the
+      emulator "localhost" is the emulated phone rather than the developer's
+      PC.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="false">10.0.3.2</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+
+    <!--
+      mDNS and home-network name suffixes. Suffix matching does work for
+      names, so this covers coldwater.local, ollama.local, nas.lan and
+      anything else resolved this way — without opening cleartext to the
+      internet at large.
+
+      User-installed certificate authorities are trusted for these names only,
+      so the appliance's own CA can be installed on the device and its HTTPS
+      endpoint used without weakening trust for any other host.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">local</domain>
+        <domain includeSubdomains="true">lan</domain>
+        <domain includeSubdomains="true">home.arpa</domain>
+        <domain includeSubdomains="true">internal</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </domain-config>
+
+    <!--
+      Add a fixed LAN address here if you run a model server at one and do not
+      want to use a name for it. It has to be the literal address; there is no
+      pattern form.
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.1.10</domain>
+    </domain-config>
+    -->
+
+    <!--
+      Debug builds only. Lets development against any LAN address work without
+      editing this file, and has no effect on a release build.
+    -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+</network-security-config>

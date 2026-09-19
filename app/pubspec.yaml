@@ -1,0 +1,58 @@
+name: coldwater
+description: Coldwater — blunt, mathematically rigorous audits of your bank statements, using your own AI.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # The audit: schema, prompt, PDF routing, arithmetic verifier.
+  audit_core:
+    path: ../packages/audit_core
+
+  # The AI layer, shared with EchoCodex. Same pin audit_core uses, so pub
+  # resolves a single copy.
+  transcript_core:
+    git:
+      url: https://github.com/DMG-Workshop/EchoCodex.git
+      path: packages/transcript_core
+      ref: f21e195103bc9567458f39a91670e464121d6ef3
+
+  # State. Plain providers, no codegen — matching EchoCodex's convention.
+  flutter_riverpod: ^2.5.1
+
+  # HTTP with interceptors, cancel tokens and per-provider retry policy,
+  # wrapped behind transcript_core's HttpTransport so the core packages stay
+  # dependency-free.
+  dio: ^5.7.0
+
+  # Keychain on iOS, Keystore-backed EncryptedSharedPreferences on Android.
+  # API keys live here and nowhere else.
+  flutter_secure_storage: ^9.2.2
+
+  # Everything that is not a secret: chosen provider, base URL, model.
+  shared_preferences: ^2.3.2
+
+  # Picking the statement PDF. Pinned below 11.x for the AGP reason EchoCodex
+  # documents on its own copy of this dependency.
+  file_picker: ^10.3.10
+
+  # On-device PDF text extraction via pdfium. The pdfbox-android route would
+  # need a second implementation for iOS; pdfium covers both platforms from
+  # one package and one code path.
+  pdfrx: ^2.6.5
+
+  intl: ^0.20.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
