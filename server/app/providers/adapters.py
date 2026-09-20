@@ -321,9 +321,12 @@ class OpenAiCompatibleProvider:
 
         body = _json_or_none(response)
         if response.status_code >= 400:
-            raise ProviderError(
-                self.name, response.status_code, error_message(body, response.text)
+            detail = (
+                _wrong_endpoint_detail(self._base)
+                if response.status_code in _NOT_A_CHAT_ENDPOINT
+                else error_message(body, response.text)
             )
+            raise ProviderError(self.name, response.status_code, detail)
 
         body = body or {}
         choices = body.get("choices") or []
@@ -340,12 +343,71 @@ class OpenAiCompatibleProvider:
         )
 
     async def test(self) -> dict[str, Any]:
-        response = await self._client.get(
+        listing = await self._client.get(
             f"{self._base}/v1/models",
             headers=self._headers,
             timeout=httpx.Timeout(10.0),
         )
-        return _describe_test(self.name, response, self._config.model)
+        described = _describe_test(self.name, listing, self._config.model)
+        if not described["ok"]:
+            return described
+
+        # Listing models proves almost nothing: a web UI in front of Ollama
+        # serves /v1/models with the real model list and then refuses the
+        # chat path, which reads as "Connected" and fails on the first
+        # audit. So the test does what the audit does, for one token.
+        return await self._probe_chat(described)
+
+    async def _probe_chat(self, described: dict[str, Any]) -> dict[str, Any]:
+        try:
+            response = await self._client.post(
+                f"{self._base}/v1/chat/completions",
+                headers=self._headers,
+                # Short: this is a reachability probe, and a cold model
+                # taking longer is reported as a caveat rather than a
+                # failure below.
+                timeout=httpx.Timeout(30.0, connect=10.0),
+                json={
+                    "model": self._config.model,
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "max_tokens": 1,
+                },
+            )
+        except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout):
+            return {
+                **described,
+                "summary": f"Connected · {self._config.model} · slow to answer",
+                "detail": "The model server is reachable but did not reply "
+                "within 30 seconds, which usually means the model is still "
+                "loading. The first audit will be slow.",
+            }
+        except httpx.HTTPError as exc:
+            return {
+                **described,
+                "ok": False,
+                "summary": f"Could not reach {self.name}",
+                "detail": str(exc),
+            }
+
+        if response.status_code in _NOT_A_CHAT_ENDPOINT:
+            return {
+                **described,
+                "ok": False,
+                "summary": f"That is not a model API ({response.status_code})",
+                "detail": _wrong_endpoint_detail(self._base),
+            }
+
+        if response.status_code >= 400:
+            return {
+                **described,
+                "ok": False,
+                "summary": f"{self.name} returned {response.status_code}",
+                "detail": error_message(
+                    _json_or_none(response), response.text
+                )[:400],
+            }
+
+        return described
 
 
 def build_provider(config: ProviderConfig, client: httpx.AsyncClient):
@@ -356,6 +418,22 @@ def build_provider(config: ProviderConfig, client: httpx.AsyncClient):
     if config.kind in ("openai", "local"):
         return OpenAiCompatibleProvider(config, client)
     raise ValueError(f"Unknown provider kind: {config.kind}")
+
+
+#: Statuses that mean the path is not a chat-completions endpoint. 405 in
+#: particular is what a web UI in front of a model returns: its static-file
+#: handler matches the path for GET and refuses POST.
+_NOT_A_CHAT_ENDPOINT = (404, 405)
+
+
+def _wrong_endpoint_detail(base_url: str) -> str:
+    return (
+        f"{base_url} answered, but it does not accept POST on "
+        "/v1/chat/completions. That is what a web front-end for a model "
+        "looks like — Open WebUI and similar serve /v1/models happily and "
+        "refuse the chat path. Point this at the model server itself: "
+        "Ollama listens on port 11434 and LM Studio on 1234."
+    )
 
 
 def _json_or_none(response: httpx.Response) -> Any:
