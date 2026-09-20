@@ -1,0 +1,90 @@
+# Coldwater, as an appliance.
+#
+# Three containers: the audit server, a local model runtime, and a reverse
+# proxy that gives the whole thing a name and a certificate.
+#
+# The proxy is not decoration. Both Android and iOS block plain HTTP by
+# default, and Android in particular cannot be told "allow any address on my
+# Wi-Fi" — its network security config matches DNS suffixes and has no
+# wildcard for IP literals. Serving HTTPS at coldwater.local sidesteps that
+# entirely: the phone apps talk to a name, over TLS, with no cleartext
+# exemption needed at all.
+#
+#   docker compose up -d
+#   docker compose --profile gpu up -d     # if the host has an NVIDIA GPU
+
+name: coldwater
+
+services:
+  coldwater:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: coldwater:local
+    restart: unless-stopped
+    environment:
+      # Default to the Ollama container beside it, so a fresh appliance works
+      # with no configuration and nothing leaving the network.
+      COLDWATER_PROVIDER: ${COLDWATER_PROVIDER:-local}
+      COLDWATER_LOCAL_FLAVOR: ${COLDWATER_LOCAL_FLAVOR:-ollama}
+      COLDWATER_BASE_URL: ${COLDWATER_BASE_URL:-http://ollama:11434}
+      COLDWATER_MODEL: ${COLDWATER_MODEL:-llama3.1:8b}
+      # Unset by default. Set it when the appliance is reachable by anyone you
+      # would not hand the statement to.
+      COLDWATER_TOKEN: ${COLDWATER_TOKEN:-}
+      COLDWATER_CURRENCY: ${COLDWATER_CURRENCY:-}
+    volumes:
+      - coldwater-data:/data
+    # Not published on the host: everything reaches it through Caddy, so
+    # there is no unencrypted port sitting open on the LAN.
+    expose:
+      - "8080"
+    networks: [coldwater]
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    expose:
+      - "11434"
+    networks: [coldwater]
+    # Ollama on CPU is slow but works. The gpu profile adds the device
+    # reservation; without a GPU present it would refuse to start, which is
+    # why it is opt-in rather than conditional.
+    profiles: ["", "cpu"]
+
+  ollama-gpu:
+    extends:
+      service: ollama
+    profiles: ["gpu"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [coldwater]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [coldwater]
+
+volumes:
+  coldwater-data:
+  ollama-models:
+  caddy-data:
+  caddy-config:
+
+networks:
+  coldwater:
+    driver: bridge

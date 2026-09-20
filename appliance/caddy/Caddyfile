@@ -1,0 +1,56 @@
+# Caddy terminates TLS for the appliance with its own internal certificate
+# authority.
+#
+# `tls internal` makes Caddy mint a certificate from a CA it generates on
+# first boot. That CA's root certificate lands in the caddy-data volume at
+#     /data/caddy/pki/authorities/local/root.crt
+# and `coldwater-ca` on the host copies it out. Install it on each phone once
+# and the apps get real HTTPS to a name — which is the only way to reach a
+# LAN server from Android without a cleartext exemption.
+
+{
+	# No ACME account, no public DNS, no internet required.
+	auto_https disable_redirects
+	admin off
+}
+
+coldwater.local, coldwater.lan, localhost {
+	tls internal
+
+	encode zstd gzip
+
+	# The upload is a whole PDF; the default body limit would reject it.
+	request_body {
+		max_size 50MB
+	}
+
+	# An audit against a cold local model legitimately takes minutes.
+	reverse_proxy coldwater:8080 {
+		transport http {
+			read_timeout 15m
+			write_timeout 15m
+		}
+	}
+
+	header {
+		# This page renders text a language model wrote about a document the
+		# user supplied. It is escaped before it is inserted, and this is the
+		# second line of defence.
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		# Paths only. A bank statement's filename is not something to write to
+		# a log file on a shared box.
+		format console
+		level WARN
+	}
+}
+
+# Plain HTTP answers only to redirect, so a typed address still lands.
+http://coldwater.local, http://coldwater.lan {
+	redir https://{host}{uri} permanent
+}

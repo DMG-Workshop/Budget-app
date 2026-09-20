@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Coldwater">
+  <rect width="512" height="512" rx="112" fill="#1a1a19"/>
+  <g fill="none" stroke="#3987e5" stroke-width="26" stroke-linecap="round">
+    <path d="M256 112v288"/>
+    <path d="M132 184l248 144"/>
+    <path d="M380 184L132 328"/>
+    <path d="M256 112l-42 46m42-46l42 46"/>
+    <path d="M256 400l-42-46m42 46l42-46"/>
+  </g>
+</svg>

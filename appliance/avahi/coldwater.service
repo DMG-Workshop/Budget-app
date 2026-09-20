@@ -1,0 +1,27 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!--
+  Advertises the appliance on the local network as coldwater.local.
+
+  This is what makes the phone apps work without a cleartext exemption.
+  Android's network security config cannot match "any address on my Wi-Fi",
+  but it can match the .local suffix — so the appliance having a name rather
+  than only an address is a functional requirement, not a nicety.
+
+  Install to /etc/avahi/services/coldwater.service.
+-->
+<service-group>
+  <name replace-wildcards="yes">Coldwater on %h</name>
+
+  <service>
+    <type>_https._tcp</type>
+    <port>443</port>
+    <txt-record>path=/</txt-record>
+  </service>
+
+  <service>
+    <type>_http._tcp</type>
+    <port>80</port>
+    <txt-record>path=/</txt-record>
+  </service>
+</service-group>

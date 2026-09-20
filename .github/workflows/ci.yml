@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned. A Flutter bump should be a visible change to this file, not
+  # something that happens on its own between two runs of the same commit.
+  FLUTTER_VERSION: "3.47.5"
+
+jobs:
+  analyze-and-test:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Resolve audit_core
+        working-directory: packages/audit_core
+        run: dart pub get
+
+      - name: Resolve the app
+        working-directory: app
+        run: flutter pub get
+
+      - name: Analyze audit_core
+        working-directory: packages/audit_core
+        run: dart analyze --fatal-infos
+
+      - name: Analyze the app
+        working-directory: app
+        run: flutter analyze --fatal-infos
+
+      - name: Test audit_core
+        working-directory: packages/audit_core
+        run: dart test
+
+      - name: Test the app
+        working-directory: app
+        run: flutter test
+
+  contract-in-sync:
+    name: Contract is in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Resolve audit_core
+        working-directory: packages/audit_core
+        run: dart pub get
+
+      # The schema and the prompt are authored in Dart and exported to
+      # contracts/, which anything that is not Dart reads. If the exporter
+      # produces a diff, someone changed the prompt or the schema without
+      # re-exporting, and the two halves have silently drifted apart.
+      - name: Re-export and diff
+        working-directory: packages/audit_core
+        run: dart run tool/export_contract.dart
+
+      - name: Fail if the export changed anything
+        run: |
+          if ! git diff --exit-code -- contracts/; then
+            echo "::error::contracts/ is stale. Run 'dart run tool/export_contract.dart' in packages/audit_core and commit the result."
+            exit 1
+          fi
+
+  android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Resolve the app
+        working-directory: app
+        run: flutter pub get
+
+      # This is the step that cannot be run in the development container,
+      # which has no Android SDK and no access to Google's Maven. It is the
+      # reason this workflow exists.
+      #
+      # pdfium is fetched at build time by pdfium_dart's native-asset hook,
+      # so this step needs outbound network as well as the SDK.
+      - name: Build debug APK
+        working-directory: app
+        run: flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: coldwater-debug-apk
+          path: app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+  server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements-dev.txt
+
+      - name: Install
+        working-directory: server
+        run: pip install -r requirements-dev.txt
+
+      # Includes the contract-parity tests, which compare the prompt this
+      # server builds against the one Dart exported, byte for byte. They are
+      # what stops the two clients drifting apart.
+      - name: Test
+        working-directory: server
+        run: python -m pytest -q
+
+  appliance:
+    name: Appliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the compose stack
+        working-directory: appliance
+        run: docker compose config --quiet
+
+      - name: Lint the scripts
+        run: shellcheck -S warning appliance/scripts/*.sh appliance/scripts/coldwater-ca
+
+      # The development container cannot do this — Docker Hub's CDN is
+      # blocked by its egress policy — so the image is first built here.
+      - name: Build the server image
+        run: docker build -f server/Dockerfile -t coldwater:ci .
+
+      - name: Check the image serves and reports healthy
+        run: |
+          docker run -d --name coldwater-ci -p 8080:8080 coldwater:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/api/health > /tmp/health.json; then
+              break
+            fi
+            sleep 2
+          done
+          cat /tmp/health.json
+          grep -q '"ok":true' /tmp/health.json
+          curl -fsS http://127.0.0.1:8080/ | grep -q "Coldwater"
+          docker rm -f coldwater-ci

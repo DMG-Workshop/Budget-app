@@ -1,0 +1,15 @@
+# The image needs only server/ and contracts/. Everything else in the
+# repository — the Flutter app, its build output, the Dart tooling — would
+# just slow the context upload down.
+.git/
+.github/
+app/
+packages/
+docs/
+appliance/build/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.dart_tool/
+**/build/
+server/tests/

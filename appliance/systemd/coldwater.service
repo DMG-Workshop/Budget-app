@@ -1,0 +1,23 @@
+[Unit]
+Description=Coldwater appliance
+Documentation=https://github.com/DMG-Workshop/Budget-app
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/coldwater/appliance
+EnvironmentFile=-/opt/coldwater/appliance/.env
+
+# Pulling and building can take a long time on a Raspberry Pi with a cold
+# cache, and systemd killing it half way leaves a broken stack behind.
+TimeoutStartSec=3600
+
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+ExecReload=/usr/bin/docker compose up -d --force-recreate
+
+[Install]
+WantedBy=multi-user.target

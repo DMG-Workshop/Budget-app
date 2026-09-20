@@ -1,0 +1,247 @@
+/* Coldwater, self-hosted.
+ *
+ * The chart colours are the same validated set the Flutter app uses, against
+ * the same surfaces they were validated against (#fcfcfb light, #1a1a19
+ * dark). Two advisories came back and are mitigated the same way here: the
+ * wants colour is under 3:1 on the light surface, and wants and leaks
+ * separate by only 7.2 deltaE under deuteranopia on the dark surface. Both
+ * are permissible only with secondary encoding — the direct labels, the 2px
+ * gaps between segments, the icon on the leak legend entry and the table
+ * view. Removing any of them makes the chart unreadable for some people.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --surface: #fcfcfb;
+  --surface-raised: #ffffff;
+  --ink: #1a1a19;
+  --ink-muted: #5c5c58;
+  --line: #e4e3df;
+  --grid: #f0efec;
+
+  --needs: #2a78d6;
+  --wants: #1baf7a;
+  --leaks: #d03b3b;
+
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+
+  --accent: #2a78d6;
+  --radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1a1a19;
+    --surface-raised: #232322;
+    --ink: #f2f1ee;
+    --ink-muted: #a3a29d;
+    --line: #383835;
+    --grid: #383835;
+
+    /* Stepped for the dark surface, not an automatic flip. */
+    --needs: #3987e5;
+    --wants: #199e70;
+    --leaks: #d03b3b;
+
+    --accent: #3987e5;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.money, .hero, table td:not(:first-child), .legend-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* Layout ------------------------------------------------------------- */
+
+.bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--surface); z-index: 5;
+}
+.bar h1 { font-size: 1.15rem; margin: 0; letter-spacing: -0.01em; }
+.bar-actions { margin-left: auto; display: flex; gap: 8px; }
+
+main { max-width: 680px; margin: 0 auto; padding: 16px; }
+
+.panel { padding: 8px 0; }
+.center { text-align: center; }
+.row { display: flex; align-items: center; gap: 10px; }
+.row.gap { gap: 12px; margin-top: 16px; }
+.spacer { flex: 1; }
+.section-head { margin: 24px 0 10px; }
+.section-head h2 { font-size: 1.1rem; margin: 0; }
+
+.muted { color: var(--ink-muted); }
+.small { font-size: 0.85rem; }
+.warn { color: var(--critical); }
+
+/* Cards --------------------------------------------------------------- */
+
+.card {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 12px;
+}
+.card-title { font-size: 1rem; margin: 0 0 4px; }
+
+.hero {
+  font-size: clamp(2.2rem, 9vw, 3rem);
+  font-weight: 700; margin: 6px 0 2px; letter-spacing: -0.02em;
+}
+.reality .summary { margin: 14px 0 0; line-height: 1.5; }
+.cut-so-far { color: var(--good); font-weight: 600; margin: 14px 0 0; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; font-weight: 600;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor;
+}
+.chip.deficit { color: var(--critical); }
+.chip.surplus { color: var(--good); }
+
+.trust { border-color: var(--warning); }
+.trust.error { border-color: var(--critical); }
+.trust summary { cursor: pointer; font-weight: 600; }
+.trust ul { margin: 10px 0 0; padding-left: 20px; }
+.trust li { margin-bottom: 6px; font-size: 0.9rem; }
+
+/* The chart ----------------------------------------------------------- */
+
+.big { font-size: 1.35rem; font-weight: 600; margin: 0 0 14px; }
+
+.bar-wrap { margin: 4px 0 16px; }
+.stacked-bar { width: 100%; height: 28px; display: block; }
+
+.legend { list-style: none; margin: 0; padding: 0; }
+.legend li { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.legend .legend-label { flex: 1; }
+.legend .legend-share { color: var(--ink-muted); }
+.legend .legend-value { font-weight: 600; }
+.legend .leak-icon { flex: none; }
+
+.table-view { margin-top: 12px; }
+.table-view summary { cursor: pointer; color: var(--ink-muted); font-size: 0.85rem; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--grid); }
+td:not(:first-child), th:not(:first-child) { text-align: right; }
+
+/* Cut list ------------------------------------------------------------ */
+
+.leak { position: relative; }
+.leak h3 { margin: 0; font-size: 1rem; }
+.leak .verdict { margin: 10px 0 0; }
+.leak .costs { color: var(--ink-muted); font-size: 0.85rem; margin: 6px 0 0; }
+.leak .unverified { color: var(--warning); font-size: 0.85rem; margin: 10px 0 0; }
+.leak .cut { margin-top: 14px; }
+
+.severity {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.72rem; font-weight: 700; text-transform: lowercase;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor;
+}
+.severity.minor { color: var(--warning); }
+.severity.moderate { color: var(--serious); }
+.severity.severe { color: var(--critical); }
+.severity.critical { color: #fff; background: var(--critical); border-color: var(--critical); }
+
+.steps { margin: 6px 0 0; padding-left: 22px; }
+.steps li { margin-bottom: 10px; }
+
+/* History ------------------------------------------------------------- */
+
+.history { list-style: none; margin: 14px 0; padding: 0; }
+.history li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; border: 1px solid var(--line);
+  border-radius: var(--radius); margin-bottom: 8px;
+}
+.history .when { color: var(--ink-muted); font-size: 0.8rem; }
+
+/* Controls ------------------------------------------------------------ */
+
+button {
+  font: inherit; cursor: pointer; border-radius: 999px;
+  padding: 9px 18px; border: 1px solid var(--line);
+  background: transparent; color: var(--ink);
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filled { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ghost.danger { color: var(--critical); }
+
+.dropzone {
+  border: 2px dashed var(--line); border-radius: var(--radius);
+  padding: 44px 20px; text-align: center; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.dropzone:hover, .dropzone:focus-visible, .dropzone.over {
+  border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.dropzone-icon {
+  width: 44px; height: 44px; stroke: var(--accent); fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.dropzone-title { font-size: 1.2rem; font-weight: 600; margin: 14px 0 6px; }
+
+.spinner {
+  width: 34px; height: 34px; margin: 28px auto 16px;
+  border: 3px solid var(--grid); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+.failure-title { color: var(--critical); font-size: 1.05rem; }
+pre { white-space: pre-wrap; word-break: break-word; font-size: 0.8rem;
+      background: var(--grid); padding: 12px; border-radius: 8px; }
+
+/* Settings dialog ------------------------------------------------------ */
+
+dialog {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface-raised); color: var(--ink);
+  max-width: 520px; width: calc(100% - 32px); padding: 20px;
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+dialog h2 { margin-top: 0; }
+dialog label { display: block; margin: 14px 0; font-weight: 600; }
+dialog input[type=text], dialog input[type=url], dialog input[type=password],
+dialog select, dialog textarea {
+  display: block; width: 100%; margin-top: 6px; font: inherit; font-weight: 400;
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--ink);
+}
+dialog fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+dialog legend { font-weight: 600; padding: 0 6px; }
+.choices label { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin: 8px 0; }
+.choices input { margin-top: 4px; }
+.choices .choice-title { font-weight: 600; display: block; }
+label.checkbox { display: flex; gap: 10px; align-items: center; font-weight: 400; }
+label.checkbox input { width: auto; }
+menu { display: flex; gap: 10px; padding: 0; margin: 20px 0 0; align-items: center; }
+
+.test-result { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px solid var(--line); }
+.test-result.ok { border-color: var(--good); }
+.test-result.bad { border-color: var(--critical); }

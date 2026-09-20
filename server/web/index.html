@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+<title>Coldwater</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+
+<header class="bar">
+  <h1>Coldwater</h1>
+  <div class="bar-actions">
+    <button id="history-button" class="ghost" type="button" hidden>History</button>
+    <button id="settings-button" class="ghost" type="button">Settings</button>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- Upload -->
+  <section id="upload" class="panel">
+    <div id="dropzone" class="dropzone" tabindex="0" role="button"
+         aria-label="Choose a bank statement PDF">
+      <svg class="dropzone-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 16V4m0 0L8 8m4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+      </svg>
+      <p class="dropzone-title">Hand over a bank statement.</p>
+      <p class="muted">It gets read, added up, and described back to you
+        without any encouragement.</p>
+      <p class="muted small">Drop a PDF here, or click to choose one.</p>
+      <input id="file-input" type="file" accept="application/pdf" hidden>
+    </div>
+    <p id="provider-line" class="muted small center"></p>
+  </section>
+
+  <!-- Working -->
+  <section id="working" class="panel center" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p id="working-step">Reading the statement…</p>
+  </section>
+
+  <!-- Failure -->
+  <section id="failure" class="panel" hidden>
+    <h2 id="failure-title" class="failure-title"></h2>
+    <details id="failure-details" hidden>
+      <summary>What went wrong</summary>
+      <pre id="failure-detail"></pre>
+    </details>
+    <div class="row gap">
+      <button id="failure-retry" class="ghost" type="button">Start over</button>
+      <button id="failure-settings" class="filled" type="button">Check settings</button>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="results" hidden>
+
+    <article class="card reality">
+      <div class="row">
+        <span id="verdict-chip" class="chip"></span>
+        <span class="spacer"></span>
+        <span id="period" class="muted small"></span>
+      </div>
+      <p id="net-cashflow" class="hero money"></p>
+      <p id="in-out" class="muted money"></p>
+      <p id="summary" class="summary"></p>
+      <p id="cut-so-far" class="cut-so-far" hidden></p>
+    </article>
+
+    <article id="trust" class="card trust" hidden>
+      <details>
+        <summary><span id="trust-title"></span></summary>
+        <ul id="trust-list"></ul>
+      </details>
+    </article>
+
+    <article class="card">
+      <h2 class="card-title">Where it went</h2>
+      <p id="breakdown-total" class="money big"></p>
+
+      <div id="bar-wrap" class="bar-wrap">
+        <svg id="bar" class="stacked-bar" viewBox="0 0 100 6" preserveAspectRatio="none"
+             role="img" aria-labelledby="bar-desc"></svg>
+        <span id="bar-desc" class="visually-hidden"></span>
+      </div>
+
+      <ul id="legend" class="legend"></ul>
+      <p id="unattributed" class="warn small" hidden></p>
+
+      <details class="table-view">
+        <summary>Show the figures</summary>
+        <table id="breakdown-table">
+          <thead><tr><th scope="col">Segment</th><th scope="col">Share</th><th scope="col">Amount</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </details>
+    </article>
+
+    <div class="row section-head">
+      <h2>The cut list</h2>
+    </div>
+    <div id="cut-list"></div>
+
+    <article id="action-plan" class="card" hidden>
+      <h2 class="card-title">Do this</h2>
+      <ol id="action-steps" class="steps"></ol>
+    </article>
+
+    <p id="route-reason" class="muted small"></p>
+    <div class="row gap">
+      <button id="again" class="filled" type="button">Audit another statement</button>
+    </div>
+  </section>
+
+  <!-- History -->
+  <section id="history" class="panel" hidden>
+    <div class="row section-head">
+      <h2>History</h2>
+      <span class="spacer"></span>
+      <button id="history-clear" class="ghost danger" type="button">Delete all</button>
+    </div>
+    <p class="muted small">Statements are never stored — only the audit of
+      them. Turn this off in settings to keep nothing at all.</p>
+    <ul id="history-list" class="history"></ul>
+    <button id="history-back" class="ghost" type="button">Back</button>
+  </section>
+
+</main>
+
+<!-- Settings -->
+<dialog id="settings">
+  <form method="dialog" id="settings-form">
+    <h2>Settings</h2>
+
+    <fieldset>
+      <legend>Where the audit runs</legend>
+      <div id="provider-choices" class="choices"></div>
+    </fieldset>
+
+    <label>Model
+      <input id="cfg-model" type="text" autocomplete="off" spellcheck="false">
+    </label>
+
+    <label id="cfg-key-label">API key
+      <input id="cfg-key" type="password" autocomplete="off" placeholder="unchanged">
+      <span class="muted small">Stored on this server only, in its data
+        directory, never returned to this page.</span>
+    </label>
+
+    <div id="local-fields" hidden>
+      <label>Local server
+        <select id="cfg-flavor">
+          <option value="ollama">Ollama (11434)</option>
+          <option value="lmstudio">LM Studio (1234)</option>
+        </select>
+      </label>
+      <label>Server address
+        <input id="cfg-base-url" type="url" placeholder="http://192.168.1.10:11434"
+               autocomplete="off" spellcheck="false">
+      </label>
+    </div>
+
+    <label>Currency hint
+      <input id="cfg-currency" type="text" placeholder="GBP" maxlength="3"
+             autocomplete="off" spellcheck="false">
+    </label>
+
+    <label>About your circumstances
+      <textarea id="cfg-context" rows="3"
+        placeholder="Anything that legitimately moves an item between needs and wants."></textarea>
+      <span class="muted small">Treated as facts, not instructions. It cannot
+        soften the audit.</span>
+    </label>
+
+    <label class="checkbox">
+      <input id="cfg-history" type="checkbox">
+      <span>Keep a history of audits on this server</span>
+    </label>
+
+    <div id="test-result" class="test-result" hidden></div>
+
+    <menu>
+      <button id="cfg-test" class="ghost" type="button">Test connection</button>
+      <span class="spacer"></span>
+      <button value="cancel" class="ghost" type="submit">Close</button>
+      <button id="cfg-save" value="save" class="filled" type="submit">Save</button>
+    </menu>
+  </form>
+</dialog>
+
+<script src="/static/js/app.js" type="module"></script>
+</body>
+</html>
