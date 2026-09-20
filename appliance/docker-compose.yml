@@ -11,7 +11,10 @@
 # exemption needed at all.
 #
 #   docker compose up -d
-#   docker compose --profile gpu up -d     # if the host has an NVIDIA GPU
+#
+# With an NVIDIA GPU, layer the override on top:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 
 name: coldwater
 
@@ -49,22 +52,12 @@ services:
     expose:
       - "11434"
     networks: [coldwater]
-    # Ollama on CPU is slow but works. The gpu profile adds the device
-    # reservation; without a GPU present it would refuse to start, which is
-    # why it is opt-in rather than conditional.
-    profiles: ["", "cpu"]
-
-  ollama-gpu:
-    extends:
-      service: ollama
-    profiles: ["gpu"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # No profile. A service with any profile set is opt-in, so putting one
+    # here would mean `docker compose up -d` brought up the web server and
+    # the proxy with no model behind them — which looks like it worked right
+    # up until the first audit. GPU support is an override file instead, for
+    # the same reason: a device reservation on a host without an NVIDIA
+    # runtime refuses to start, so it cannot be the default.
 
   caddy:
     image: caddy:2-alpine

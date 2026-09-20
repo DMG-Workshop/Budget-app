@@ -33,7 +33,11 @@ docker compose up -d
 docker compose exec ollama ollama pull llama3.1:8b
 ```
 
-With an NVIDIA GPU: `docker compose --profile gpu up -d`.
+With an NVIDIA GPU, layer the override on top:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
 
 ## The certificate — read this before the phones
 

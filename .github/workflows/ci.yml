@@ -151,7 +151,24 @@ jobs:
 
       - name: Validate the compose stack
         working-directory: appliance
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.gpu.yml config --quiet
+
+      # `config --quiet` only checks syntax. This checks what actually comes
+      # up: an earlier version put the model runtime behind a profile, which
+      # meant `docker compose up -d` served a web UI with no model behind it
+      # and looked fine until the first audit.
+      - name: Check the default stack starts everything it needs
+        working-directory: appliance
+        run: |
+          got=$(docker compose config --services | sort | tr '\n' ' ')
+          echo "default services: $got"
+          test "$got" = "caddy coldwater ollama "
+          if docker compose config | grep -q 'profiles:'; then
+            echo "::error::A service is behind a profile, so it will not start by default."
+            exit 1
+          fi
 
       - name: Lint the scripts
         run: shellcheck -S warning appliance/scripts/*.sh appliance/scripts/coldwater-ca
