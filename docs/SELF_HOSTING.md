@@ -39,6 +39,49 @@ With an NVIDIA GPU, layer the override on top:
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
 
+## Podman Desktop
+
+The stack runs under Podman, with three adjustments. Substitute `podman
+compose` for `docker compose` throughout.
+
+**Give the machine enough room first.** On macOS and Windows, Podman runs
+everything inside a VM that defaults to about 2 GB of RAM — not enough to
+load an 8B model, and the failure looks like a hang rather than an error.
+
+```bash
+podman machine stop
+podman machine set --memory 8192 --cpus 4 --disk-size 60
+podman machine start
+```
+
+**Move the ports.** Rootless Podman cannot bind below 1024, so `80:80`
+fails. In `appliance/.env`:
+
+```properties
+COLDWATER_HTTP_PORT=8080
+COLDWATER_HTTPS_PORT=8443
+```
+
+Then the appliance is at `https://localhost:8443`. The phone apps expect
+the standard port, so for real use either run Podman rootful
+(`podman machine set --rootful`) or allow the low ports on Linux with
+`sudo sysctl net.ipv4.ip_unprivileged_port_start=80`.
+
+**Then:**
+
+```bash
+cd appliance
+podman compose up -d
+podman compose exec ollama ollama pull llama3.1:8b
+```
+
+Image names are fully qualified in the compose file so Podman does not stop
+to ask which registry to use, and the Caddyfile mount carries `,z` so it
+works where SELinux is enforcing.
+
+If `podman compose` is not wired up on your install, `podman-compose` from
+pip works the same way, as does pointing Docker's own CLI at Podman's socket.
+
 ## The certificate — read this before the phones
 
 The proxy issues its own certificate from a certificate authority it creates
